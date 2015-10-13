@@ -1,0 +1,20 @@
+#!/usr/bin/python
+
+import json
+from lib import satnogsdb
+
+#
+# This is a test framework for the satnogs database API module
+#
+
+def main():
+    sndb = satnogsdb.SatnogsDb(cache = True)
+    satellites = sndb.satellites()
+    transmitters = sndb.transmitters()
+
+    print "========== satellites =========="
+    print json.dumps(satellites, sort_keys=True, indent=4)
+    print "========== transmitters =========="
+    print json.dumps(transmitters, sort_keys=True, indent=4)
+
+main()

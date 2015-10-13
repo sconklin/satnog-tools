@@ -1,0 +1,119 @@
+#!/usr/bin/python
+
+import json
+from lib import satnogsdb
+from os.path import expanduser
+
+#
+# This is a test framework for the satnogs database API module
+#
+
+V_LOW =   144000000
+V_HIGH =  148000000
+U_LOW =   420000000
+U_HIGH =  450000000
+L_LOW =  1240000000
+L_HIGH = 1300000000
+
+def in_v(freq):
+    if (freq > V_LOW) and (freq < V_HIGH):
+        return True
+    else:
+        return False
+
+def in_u(freq):
+    if (freq > U_LOW) and (freq < U_HIGH):
+        return True
+    else:
+        return False
+
+def in_l(freq):
+    if (freq > L_LOW) and (freq < L_HIGH):
+        return True
+    else:
+        return False
+
+def write_module(fp, ids):
+    first = True
+    fp.write("[GLOBAL]\n")
+    fp.write("SATELLITES=")
+    for id in set(ids):
+        if (not first):
+            fp.write(";")
+        else:
+            first = False
+        fp.write("%d" % id)
+    fp.write("\n")
+
+def main():
+    #sndb = satnogsdb.SatnogsDb(cache = True) # For local testing without repeatedly hitting the API
+    sndb = satnogsdb.SatnogsDb()
+    satellites = sndb.satellites()
+    transmitters = sndb.transmitters()
+
+    #
+    # gpredict 'modules' are configured in files that look like this, and the file name is the module name
+    #   They are stored in ~/.config/Gpredict/modules
+    #
+    #[GLOBAL]
+    #SATELLITES=35865;40069;25338;28654;33591
+
+    gp_path = expanduser("~") + "/.config/Gpredict/modules/"
+
+    # Save a Module that has every transmitter that's alive
+    with open(gp_path + "SatNogAlive.mod", 'w') as out:
+        birds = []
+        for trx in transmitters:
+            if trx["alive"]:
+                birds.append(trx["norad_cat_id"])
+        write_module(out, birds)
+
+    # Save a Module that has every VU transponder that's alive
+    # Must have both uplink and downlink, both in V/U bands
+    #
+    # It appears that anything with a transponder has both
+    # uplink_low and downlink_low fields
+    with open(gp_path + "SatNogVU.mod", 'w') as out:
+        birds = []
+        for trx in transmitters:
+            if trx["alive"]:
+                if (trx["uplink_low"] is not None) and (trx["downlink_low"] is not None):
+                    if in_v(trx["uplink_low"]) or in_u(trx["uplink_low"]):
+                        if in_v(trx["downlink_low"]) or in_u(trx["downlink_low"]):
+                            #print "Appending V/U band %d" % trx["norad_cat_id"]
+                            birds.append(trx["norad_cat_id"])
+        write_module(out, birds)
+
+    # Save a Module that has L band that's alive
+    # Must have both uplink and downlink, one in L band
+    with open(gp_path + "SatNogL.mod", 'w') as out:
+        birds = []
+        for trx in transmitters:
+            if trx["alive"]:
+                if (trx["uplink_low"] is not None) and (trx["downlink_low"] is not None):
+                    if in_l(trx["uplink_low"]) or in_l(trx["uplink_low"]):
+                        #print "Appending L band %d" % trx["norad_cat_id"]
+                        birds.append(trx["norad_cat_id"])
+        write_module(out, birds)
+
+    # Save a Module that has beacons which are alive
+    with open(gp_path + "SatNogBeacons.mod", 'w') as out:
+        birds = []
+        for trx in transmitters:
+            if trx["alive"]:
+                if (trx["description"].lower().find("beacon") != -1):
+                    #print "Appending Beacon %d" % trx["norad_cat_id"]
+                    birds.append(trx["norad_cat_id"])
+        write_module(out, birds)
+
+    # Save a Module that has beacons which are alive
+    with open(gp_path + "SatNogTelemetry.mod", 'w') as out:
+        birds = []
+        for trx in transmitters:
+            if trx["alive"]:
+                if (trx["description"].lower().find("tlm") != -1):
+                    #print "Appending Telemtry %d" % trx["norad_cat_id"]
+                    birds.append(trx["norad_cat_id"])
+        write_module(out, birds)
+
+main()
